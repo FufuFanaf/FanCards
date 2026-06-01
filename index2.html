@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>UNO CYBER — Multiplayer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+:root {
+  --neon-cyan: #00f5ff;
+  --neon-pink: #ff006e;
+  --neon-yellow: #ffee00;
+  --neon-green: #39ff14;
+  --neon-purple: #bf00ff;
+  --bg-dark: #050810;
+  --bg-mid: #0a1020;
+  --bg-panel: #0d1830;
+  --card-red: #ff2244;
+  --card-blue: #0088ff;
+  --card-green: #00cc44;
+  --card-yellow: #ffcc00;
+  --card-wild: #1a1a2e;
+  --text-main: #e0f4ff;
+  --grid-line: rgba(0,245,255,0.07);
+  --glow-cyan: 0 0 10px #00f5ff, 0 0 20px #00f5ff44;
+  --glow-pink: 0 0 10px #ff006e, 0 0 20px #ff006e44;
+  --glow-yellow: 0 0 10px #ffee00, 0 0 20px #ffee0044;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+body {
+  background: var(--bg-dark);
+  color: var(--text-main);
+  font-family: 'Rajdhani', sans-serif;
+  min-height: 100vh;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Cyberpunk grid background */
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events:none;
+  z-index:0;
+}
+
+body::after {
+  content:'';
+  position:fixed;
+  inset:0;
+  background: radial-gradient(ellipse at 20% 50%, rgba(0,245,255,0.04) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 50%, rgba(255,0,110,0.04) 0%, transparent 60%);
+  pointer-events:none;
+  z-index:0;
+}
+
+/* =================== SCREENS =================== */
+.screen { 
+  position:fixed; inset:0; 
+  display:flex; flex-direction:column; 
+  align-items:center; justify-content:center;
+  z-index:10; padding:20px;
+  transition: opacity 0.4s, transform 0.4s;
+}
+.screen.hidden { opacity:0; pointer-events:none; transform:scale(0.97); }
+
+/* =================== MENU =================== */
+#menuScreen {
+  gap:24px;
+}
+
+.logo-wrap {
+  text-align:center;
+  margin-bottom:8px;
+}
+
+.logo-title {
+  font-family:'Orbitron', monospace;
+  font-size:clamp(48px,12vw,96px);
+  font-weight:900;
+  line-height:1;
+  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-pink), var(--neon-yellow));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 20px rgba(0,245,255,0.5));
+  letter-spacing:4px;
+  animation: logoGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes logoGlow {
+  from { filter: drop-shadow(0 0 10px rgba(0,245,255,0.3)); }
+  to { filter: drop-shadow(0 0 30px rgba(255,0,110,0.6)); }
+}
+
+.logo-sub {
+  font-family:'Share Tech Mono';
+  font-size:clamp(12px,3vw,16px);
+  color: var(--neon-cyan);
+  letter-spacing:6px;
+  text-transform:uppercase;
+  opacity:0.7;
+}
+
+.card-preview {
+  display:flex; gap:10px; justify-content:center;
+  margin:4px 0;
+}
+
+.card-mini {
+  width:36px; height:54px;
+  border-radius:8px;
+  border:2px solid rgba(255,255,255,0.3);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Orbitron'; font-weight:900;
+  font-size:14px;
+  animation: cardFloat 2s ease-in-out infinite;
+  box-shadow: 0 0 15px currentColor;
+}
+.card-mini.r { background:var(--card-red); color:#fff; animation-delay:0s; }
+.card-mini.b { background:var(--card-blue); color:#fff; animation-delay:0.3s; }
+.card-mini.g { background:var(--card-green); color:#fff; animation-delay:0.6s; }
+.card-mini.y { background:var(--card-yellow); color:#000; animation-delay:0.9s; }
+
+@keyframes cardFloat {
+  0%,100%{ transform: translateY(0) rotate(-3deg); }
+  50%{ transform: translateY(-8px) rotate(3deg); }
+}
+
+.menu-panel {
+  background: linear-gradient(135deg, rgba(13,24,48,0.9), rgba(10,16,32,0.95));
+  border: 1px solid rgba(0,245,255,0.3);
+  border-radius:16px;
+  padding:28px 32px;
+  width:100%; max-width:380px;
+  box-shadow: 0 0 40px rgba(0,245,255,0.1), inset 0 1px 0 rgba(0,245,255,0.2);
+  position:relative;
+  overflow:hidden;
+}
+.menu-panel::before {
+  content:'';
+  position:absolute; top:0; left:0; right:0; height:1px;
+  background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+}
+
+.panel-title {
+  font-family:'Orbitron'; font-size:13px; letter-spacing:3px;
+  color:var(--neon-cyan); text-transform:uppercase; margin-bottom:20px;
+  text-align:center; opacity:0.8;
+}
+
+.input-group { margin-bottom:16px; }
+.input-group label {
+  display:block; font-size:12px; letter-spacing:2px;
+  color:var(--neon-cyan); opacity:0.7; margin-bottom:6px;
+  font-family:'Share Tech Mono';
+}
+.cyber-input {
+  width:100%; padding:12px 16px;
+  background: rgba(0,245,255,0.05);
+  border:1px solid rgba(0,245,255,0.3);
+  border-radius:8px; color:var(--text-main);
+  font-family:'Share Tech Mono'; font-size:15px;
+  outline:none; transition:all 0.3s;
+  text-transform:uppercase; letter-spacing:3px;
+}
+.cyber-input:focus {
+  border-color:var(--neon-cyan);
+  box-shadow: var(--glow-cyan);
+  background: rgba(0,245,255,0.08);
+}
+.cyber-input::placeholder { color:rgba(224,244,255,0.2); text-transform:none; letter-spacing:1px; }
+
+.btn {
+  width:100%; padding:14px; border:none; border-radius:10px;
+  font-family:'Orbitron'; font-weight:700;
+  font-size:clamp(13px,3vw,15px); letter-spacing:2px;
+  cursor:pointer; transition:all 0.2s;
+  text-transform:uppercase; position:relative; overflow:hidden;
+}
+.btn::after {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(rgba(255,255,255,0.1), transparent);
+  pointer-events:none;
+}
+.btn:active { transform:scale(0.97); }
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--neon-cyan), #0077aa);
+  color:#000; box-shadow:var(--glow-cyan);
+}
+.btn-primary:hover { box-shadow: 0 0 20px var(--neon-cyan), 0 0 40px rgba(0,245,255,0.4); }
+
+.btn-secondary {
+  background: linear-gradient(135deg, var(--neon-pink), #880033);
+  color:#fff; box-shadow:var(--glow-pink);
+}
+.btn-secondary:hover { box-shadow: 0 0 20px var(--neon-pink), 0 0 40px rgba(255,0,110,0.4); }
+
+.btn-ghost {
+  background:transparent; color:var(--neon-cyan);
+  border:1px solid rgba(0,245,255,0.4); font-size:12px; padding:10px;
+}
+
+.divider {
+  display:flex; align-items:center; gap:12px; margin:16px 0;
+  color:rgba(224,244,255,0.3); font-size:12px; font-family:'Share Tech Mono';
+}
+.divider::before,.divider::after {
+  content:''; flex:1; height:1px;
+  background:linear-gradient(90deg, transparent, rgba(0,245,255,0.2), transparent);
+}
+
+.room-code-display {
+  background: rgba(0,245,255,0.1);
+  border:1px solid var(--neon-cyan);
+  border-radius:8px; padding:12px;
+  text-align:center; margin:12px 0;
+  display:none;
+}
+.room-code-display.show { display:block; }
+.room-code-val {
+  font-family:'Orbitron'; font-size:28px; font-weight:900;
+  color:var(--neon-cyan); letter-spacing:8px;
+  text-shadow:var(--glow-cyan);
+  animation: codeFlicker 2s ease-in-out infinite;
+}
+@keyframes codeFlicker {
+  0%,100%{opacity:1} 92%{opacity:1} 94%{opacity:0.6} 96%{opacity:1} 98%{opacity:0.7}
+}
+.room-code-hint { font-size:11px; color:rgba(224,244,255,0.5); margin-top:4px; letter-spacing:1px; font-family:'Share Tech Mono'; }
+
+.status-msg {
+  text-align:center; font-family:'Share Tech Mono'; font-size:12px;
+  color:var(--neon-yellow); min-height:18px; letter-spacing:1px;
+  animation: blink 1.5s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.players-waiting {
+  display:flex; gap:8px; justify-content:center; flex-wrap:wrap;
+  margin-top:8px;
+}
+.player-badge {
+  padding:4px 12px; border-radius:20px;
+  background:rgba(57,255,20,0.15); border:1px solid var(--neon-green);
+  color:var(--neon-green); font-family:'Share Tech Mono'; font-size:11px;
+}
+
+/* =================== GAME SCREEN =================== */
+#gameScreen {
+  padding:0;
+  overflow:hidden;
+  justify-content:flex-start;
+}
+
+.game-layout {
+  width:100%; height:100vh;
+  display:flex; flex-direction:column;
+  max-width:600px; margin:0 auto;
+  position:relative;
+}
+
+/* Opponents area */
+.opponents-area {
+  display:flex; gap:6px; padding:8px 8px 4px;
+  overflow-x:auto; scrollbar-width:none;
+  flex-shrink:0;
+  min-height:100px;
+}
+.opponents-area::-webkit-scrollbar { display:none; }
+
+.opponent-slot {
+  flex:1; min-width:80px; max-width:140px;
+  background:rgba(13,24,48,0.8);
+  border:1px solid rgba(0,245,255,0.2);
+  border-radius:12px; padding:8px;
+  display:flex; flex-direction:column; align-items:center;
+  gap:4px; position:relative; transition:all 0.3s;
+  flex-shrink:0;
+}
+.opponent-slot.active-turn {
+  border-color:var(--neon-yellow);
+  box-shadow: 0 0 15px rgba(255,238,0,0.3);
+  background:rgba(255,238,0,0.05);
+}
+.opponent-slot.active-turn::after {
+  content:'▼'; position:absolute; bottom:-14px;
+  color:var(--neon-yellow); font-size:10px;
+  animation:bounce 0.5s ease-in-out infinite alternate;
+}
+@keyframes bounce { from{transform:translateY(0)} to{transform:translateY(3px)} }
+
+.opp-name {
+  font-family:'Orbitron'; font-size:9px; font-weight:700;
+  color:var(--neon-cyan); letter-spacing:1px; text-align:center;
+  max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.opp-cards {
+  display:flex; flex-wrap:wrap; justify-content:center; gap:2px;
+}
+.opp-card-back {
+  width:16px; height:22px; border-radius:3px;
+  background: linear-gradient(135deg, #0a0a1a, #1a1a3a);
+  border:1px solid rgba(0,245,255,0.4);
+  position:relative; overflow:hidden;
+  flex-shrink:0;
+}
+.opp-card-back::after {
+  content:''; position:absolute; inset:2px;
+  border-radius:2px;
+  background: linear-gradient(135deg, var(--neon-pink), var(--neon-cyan));
+  opacity:0.3;
+}
+.opp-count {
+  font-family:'Orbitron'; font-size:18px; font-weight:900;
+  color:#fff; line-height:1;
+}
+.opp-count.uno-alert {
+  color:var(--neon-pink);
+  animation:unoAlert 0.5s ease-in-out infinite alternate;
+  text-shadow:var(--glow-pink);
+}
+@keyframes unoAlert { from{transform:scale(1)} to{transform:scale(1.2)} }
+
+/* Center area */
+.center-area {
+  flex:1; display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:12px; padding:8px;
+  position:relative;
+}
+
+.turn-indicator {
+  font-family:'Orbitron'; font-size:clamp(9px,2.5vw,12px);
+  letter-spacing:3px; padding:5px 16px;
+  border-radius:20px; text-align:center;
+  transition:all 0.3s;
+}
+.turn-indicator.my-turn {
+  background:rgba(57,255,20,0.15); border:1px solid var(--neon-green);
+  color:var(--neon-green); box-shadow:0 0 15px rgba(57,255,20,0.2);
+  animation:myTurnPulse 1s ease-in-out infinite alternate;
+}
+@keyframes myTurnPulse {
+  from{box-shadow:0 0 10px rgba(57,255,20,0.2)}
+  to{box-shadow:0 0 25px rgba(57,255,20,0.5)}
+}
+.turn-indicator.other-turn {
+  background:rgba(255,0,110,0.1); border:1px solid rgba(255,0,110,0.3);
+  color:rgba(224,244,255,0.5);
+}
+
+.piles-row {
+  display:flex; align-items:center; gap:24px;
+  position:relative;
+}
+
+.pile-label {
+  font-family:'Share Tech Mono'; font-size:10px;
+  color:rgba(224,244,255,0.4); text-align:center;
+  letter-spacing:2px; margin-top:4px;
+}
+
+/* Cards */
+.card {
+  width:70px; height:105px;
+  border-radius:12px; position:relative;
+  cursor:pointer; user-select:none;
+  transition:transform 0.2s, box-shadow 0.2s;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+}
+
+.card-face {
+  width:100%; height:100%; border-radius:11px;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  position:relative; overflow:hidden;
+}
+
+/* Card colors */
+.card-red .card-face { background:linear-gradient(145deg, #ff3355, #cc1133); }
+.card-blue .card-face { background:linear-gradient(145deg, #0099ff, #0055cc); }
+.card-green .card-face { background:linear-gradient(145deg, #00dd55, #009933); }
+.card-yellow .card-face { background:linear-gradient(145deg, #ffdd00, #ccaa00); }
+.card-wild .card-face {
+  background:conic-gradient(from 0deg, #ff3355 0deg 90deg, #0099ff 90deg 180deg, #00dd55 180deg 270deg, #ffdd00 270deg 360deg);
+}
+
+.card-shine {
+  position:absolute; inset:0;
+  background:linear-gradient(135deg, rgba(255,255,255,0.25) 0%, transparent 50%);
+  border-radius:11px;
+  pointer-events:none;
+}
+
+.card-inner-oval {
+  position:absolute;
+  width:55%; height:75%;
+  border-radius:50%;
+  background:rgba(255,255,255,0.15);
+  border:2px solid rgba(255,255,255,0.3);
+  transform:rotate(-30deg);
+}
+
+.card-value {
+  font-family:'Orbitron'; font-weight:900;
+  position:relative; z-index:2; text-align:center;
+  line-height:1; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+.card-value.num { font-size:36px; color:#fff; }
+.card-yellow .card-value.num { color:#000; }
+.card-value.sym { font-size:20px; color:#fff; }
+.card-yellow .card-value.sym { color:#000; }
+.card-value.wild-sym { font-size:13px; color:#fff; letter-spacing:1px; font-weight:700; }
+
+.card-corner {
+  position:absolute; font-family:'Orbitron'; font-weight:900;
+  font-size:9px; color:rgba(255,255,255,0.8);
+  line-height:1;
+}
+.card-corner.tl { top:5px; left:6px; }
+.card-corner.br { bottom:5px; right:6px; transform:rotate(180deg); }
+.card-yellow .card-corner { color:rgba(0,0,0,0.6); }
+
+/* Deck card */
+.deck-card {
+  background:linear-gradient(145deg, #0a0a1a, #1a1a3a);
+  border:2px solid rgba(0,245,255,0.5);
+  box-shadow: 0 0 15px rgba(0,245,255,0.2), 0 4px 15px rgba(0,0,0,0.5);
+}
+.deck-card:hover {
+  transform:scale(1.05) translateY(-3px);
+  box-shadow: 0 0 25px rgba(0,245,255,0.5), 0 8px 20px rgba(0,0,0,0.5);
+}
+.deck-card .card-face {
+  background:linear-gradient(145deg, #0a0a1a, #1a1a3a);
+  display:flex; align-items:center; justify-content:center;
+}
+.deck-logo {
+  font-family:'Orbitron'; font-weight:900; font-size:22px;
+  background:linear-gradient(135deg, var(--neon-cyan), var(--neon-pink));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.deck-count {
+  font-family:'Share Tech Mono'; font-size:10px;
+  color:var(--neon-cyan); text-align:center; margin-top:2px;
+  letter-spacing:1px; opacity:0.7;
+}
+
+/* Discard pile */
+.discard-pile {
+  position:relative;
+}
+.discard-pile .card {
+  box-shadow:0 0 20px rgba(0,0,0,0.5);
+}
+
+/* Player hand */
+.player-area {
+  flex-shrink:0;
+  background:rgba(5,8,16,0.9);
+  border-top:1px solid rgba(0,245,255,0.15);
+  padding:8px 8px 12px;
+}
+
+.hand-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 4px 6px;
+  flex-wrap:wrap; gap:6px;
+}
+.player-name-tag {
+  font-family:'Orbitron'; font-size:10px; font-weight:700;
+  color:var(--neon-cyan); letter-spacing:2px;
+  display:flex; align-items:center; gap:6px;
+}
+.name-dot {
+  width:7px; height:7px; border-radius:50%;
+  background:var(--neon-green); box-shadow:0 0 8px var(--neon-green);
+  animation:dotPulse 1s ease-in-out infinite alternate;
+}
+@keyframes dotPulse { from{opacity:0.5} to{opacity:1} }
+
+.btn-uno {
+  padding:7px 18px; border:none; border-radius:20px;
+  font-family:'Orbitron'; font-weight:900; font-size:clamp(11px,3vw,14px);
+  letter-spacing:2px; cursor:pointer;
+  background:linear-gradient(135deg, var(--neon-pink), #880033);
+  color:#fff; box-shadow:var(--glow-pink);
+  transition:all 0.2s;
+  display:none;
+}
+.btn-uno.show { display:block; }
+.btn-uno:active { transform:scale(0.95); }
+
+.hand-scroll {
+  overflow:visible;
+  padding:18px 12px 4px;
+  width:100%;
+}
+
+.hand-cards {
+  display:flex;
+  justify-content:center;
+  align-items:flex-end;
+  padding-bottom:6px;
+  /* overlap via negative margin set dynamically by JS */
+  position:relative;
+  min-height:105px;
+}
+
+/* Hand cards — overlap fan */
+.hand-card {
+  width:60px; height:90px;
+  border-radius:10px;
+  flex-shrink:0;
+  transition:transform 0.18s cubic-bezier(0.25,0.46,0.45,0.94),
+             box-shadow 0.18s, filter 0.18s, z-index 0s;
+  box-shadow:0 4px 12px rgba(0,0,0,0.55);
+  cursor:pointer;
+  position:relative;
+  /* border neon sesuai warna kartu */
+  outline:2px solid transparent;
+}
+.hand-card:hover {
+  transform:translateY(-22px) scale(1.1) !important;
+  box-shadow:0 16px 28px rgba(0,0,0,0.6) !important;
+  z-index:50 !important;
+  outline:2px solid rgba(255,255,255,0.4);
+}
+.hand-card.playable:hover {
+  box-shadow:0 0 22px rgba(57,255,20,0.6), 0 16px 28px rgba(0,0,0,0.5) !important;
+  outline:2px solid var(--neon-green);
+}
+.hand-card.not-playable { filter:brightness(0.45) saturate(0.25); cursor:not-allowed; }
+.hand-card.not-playable:hover { transform:translateY(-4px) scale(1.02) !important; outline:none; }
+.hand-card.selected {
+  transform:translateY(-26px) scale(1.12) !important;
+  z-index:50 !important;
+  outline:2px solid var(--neon-cyan);
+}
+
+/* Cyberpunk highlight for playable */
+.hand-card.playable {
+  outline: 2px solid rgba(57,255,20,0.5);
+}
+.hand-card.playable::after {
+  content:''; position:absolute; inset:-3px;
+  border-radius:13px;
+  border:2px solid var(--neon-green);
+  box-shadow:0 0 10px rgba(57,255,20,0.35);
+  pointer-events:none;
+  animation:playableGlow 1.5s ease-in-out infinite alternate;
+}
+@keyframes playableGlow {
+  from{box-shadow:0 0 5px rgba(57,255,20,0.2), inset 0 0 5px rgba(57,255,20,0.05)}
+  to{box-shadow:0 0 16px rgba(57,255,20,0.65), inset 0 0 8px rgba(57,255,20,0.1)}
+}
+
+/* Game info bar */
+.info-bar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:6px 12px;
+  background:rgba(13,24,48,0.6);
+  border-bottom:1px solid rgba(0,245,255,0.1);
+  flex-shrink:0;
+  gap:8px;
+}
+.direction-badge {
+  font-family:'Share Tech Mono'; font-size:11px;
+  color:var(--neon-purple); letter-spacing:2px;
+  display:flex; align-items:center; gap:4px;
+}
+.color-badge {
+  padding:3px 10px; border-radius:10px;
+  font-family:'Orbitron'; font-size:10px; font-weight:700;
+  letter-spacing:1px;
+}
+.color-badge.red { background:var(--card-red); color:#fff; }
+.color-badge.blue { background:var(--card-blue); color:#fff; }
+.color-badge.green { background:var(--card-green); color:#fff; }
+.color-badge.yellow { background:var(--card-yellow); color:#000; }
+.color-badge.wild { background:rgba(191,0,255,0.3); color:var(--neon-purple); border:1px solid var(--neon-purple); }
+
+.stack-badge {
+  font-family:'Orbitron'; font-size:10px; font-weight:700;
+  color:var(--neon-pink); letter-spacing:1px;
+  animation:stackPulse 0.5s ease-in-out infinite alternate;
+}
+@keyframes stackPulse { from{opacity:0.6} to{opacity:1} }
+
+/* =================== WILD COLOR PICKER =================== */
+#colorPicker {
+  position:fixed; inset:0; z-index:100;
+  background:rgba(5,8,16,0.92);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:24px;
+  backdrop-filter:blur(8px);
+}
+#colorPicker.hidden { display:none; }
+
+.picker-title {
+  font-family:'Orbitron'; font-weight:900;
+  font-size:clamp(18px,5vw,28px);
+  background:linear-gradient(135deg,var(--neon-cyan),var(--neon-pink));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  background-clip:text; letter-spacing:3px;
+}
+
+.color-options {
+  display:grid; grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+.color-opt {
+  width:120px; height:120px; border-radius:16px;
+  cursor:pointer; border:3px solid transparent;
+  transition:all 0.2s; position:relative;
+  overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+}
+.color-opt:hover { transform:scale(1.08); }
+.color-opt:active { transform:scale(0.97); }
+.color-opt.red { background:linear-gradient(145deg,#ff3355,#cc1133); box-shadow:0 0 20px rgba(255,34,68,0.4); }
+.color-opt.blue { background:linear-gradient(145deg,#0099ff,#0055cc); box-shadow:0 0 20px rgba(0,136,255,0.4); }
+.color-opt.green { background:linear-gradient(145deg,#00dd55,#009933); box-shadow:0 0 20px rgba(0,204,68,0.4); }
+.color-opt.yellow { background:linear-gradient(145deg,#ffdd00,#ccaa00); box-shadow:0 0 20px rgba(255,204,0,0.4); }
+.color-opt-label {
+  font-family:'Orbitron'; font-weight:900; font-size:13px;
+  color:#fff; letter-spacing:2px;
+}
+.color-opt.yellow .color-opt-label { color:#000; }
+
+/* =================== NOTIFICATIONS =================== */
+.notif-container {
+  position:fixed; top:0; left:50%; transform:translateX(-50%);
+  z-index:200; display:flex; flex-direction:column;
+  align-items:center; gap:6px; padding-top:10px;
+  pointer-events:none; width:100%; max-width:400px;
+}
+.notif {
+  padding:10px 20px; border-radius:25px;
+  font-family:'Orbitron'; font-size:12px; font-weight:700;
+  letter-spacing:2px; text-align:center;
+  animation:notifIn 0.3s ease, notifOut 0.3s ease 2.7s forwards;
+  max-width:90%;
+}
+.notif.info { background:rgba(0,245,255,0.15); border:1px solid var(--neon-cyan); color:var(--neon-cyan); }
+.notif.warn { background:rgba(255,238,0,0.15); border:1px solid var(--neon-yellow); color:var(--neon-yellow); }
+.notif.success { background:rgba(57,255,20,0.15); border:1px solid var(--neon-green); color:var(--neon-green); }
+.notif.danger { background:rgba(255,0,110,0.15); border:1px solid var(--neon-pink); color:var(--neon-pink); }
+@keyframes notifIn { from{opacity:0;transform:translateY(-20px)} to{opacity:1;transform:translateY(0)} }
+@keyframes notifOut { to{opacity:0;transform:translateY(-10px)} }
+
+/* =================== CARD FLY ANIMATION =================== */
+.card-fly {
+  position:fixed; z-index:300;
+  pointer-events:none;
+  border-radius:10px;
+  transition:none;
+}
+
+/* =================== VICTORY SCREEN =================== */
+#victoryScreen {
+  z-index:500;
+  background:rgba(5,8,16,0.96);
+}
+.victory-content { text-align:center; max-width:400px; width:100%; }
+.victory-glitch {
+  font-family:'Orbitron'; font-weight:900;
+  font-size:clamp(36px,10vw,64px);
+  color:var(--neon-cyan);
+  position:relative; display:inline-block;
+  animation:glitch 2s infinite;
+  letter-spacing:4px;
+}
+@keyframes glitch {
+  0%,100%{text-shadow:2px 0 var(--neon-pink),-2px 0 var(--neon-cyan)}
+  20%{text-shadow:-2px 0 var(--neon-pink),2px 0 var(--neon-cyan);transform:translate(1px)}
+  40%{text-shadow:2px 0 var(--neon-pink),-2px 0 var(--neon-cyan);transform:translate(-1px)}
+  60%{text-shadow:-2px 0 var(--neon-cyan),2px 0 var(--neon-pink)}
+  80%{text-shadow:2px 0 var(--neon-cyan),-2px 0 var(--neon-pink);transform:translate(1px)}
+}
+.victory-winner {
+  font-family:'Orbitron'; font-size:clamp(14px,4vw,20px);
+  color:var(--neon-yellow); letter-spacing:3px; margin:12px 0;
+}
+.victory-scores {
+  background:rgba(0,245,255,0.05); border:1px solid rgba(0,245,255,0.2);
+  border-radius:12px; padding:16px; margin:16px 0;
+}
+.score-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:6px 0; border-bottom:1px solid rgba(0,245,255,0.1);
+  font-family:'Share Tech Mono'; font-size:13px;
+}
+.score-row:last-child { border:none; }
+.score-name { color:var(--text-main); }
+.score-pts { color:var(--neon-cyan); font-weight:bold; }
+
+/* =================== ANIMATIONS =================== */
+@keyframes dealCard {
+  from { opacity:0; transform:scale(0.3) rotate(15deg); }
+  to { opacity:1; transform:scale(1) rotate(0deg); }
+}
+.dealing { animation:dealCard 0.3s ease forwards; }
+
+@keyframes cardPlay {
+  0% { transform:scale(1); }
+  50% { transform:scale(1.2); }
+  100% { transform:scale(1); }
+}
+
+/* scan line effect */
+.scanline {
+  position:fixed; inset:0; z-index:1; pointer-events:none;
+  background:repeating-linear-gradient(
+    0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px
+  );
+}
+
+/* =================== CHAT / LOG =================== */
+.game-log {
+  position:absolute; bottom:0; left:0;
+  width:180px; max-height:80px;
+  overflow:hidden; pointer-events:none;
+  padding:4px 8px;
+}
+.log-entry {
+  font-family:'Share Tech Mono'; font-size:9px;
+  color:rgba(224,244,255,0.4); line-height:1.4;
+  animation:logFade 8s ease forwards;
+}
+@keyframes logFade { 0%{opacity:0.8} 80%{opacity:0.4} 100%{opacity:0} }
+
+/* =================== LOADING =================== */
+.loading-dots::after {
+  content:''; animation:dots 1.5s steps(4,end) infinite;
+}
+@keyframes dots {
+  0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} 100%{content:''}
+}
+
+/* Responsive */
+@media(max-width:360px) {
+  .card { width:58px; height:87px; }
+  .hand-card { width:52px; height:78px; }
+  .card-value.num { font-size:28px; }
+  .color-opt { width:100px; height:100px; }
+}
+@media(min-width:601px) {
+  .game-layout { max-width:520px; }
+  .hand-card { width:68px; height:102px; }
+  .card { width:76px; height:114px; }
+}
+
+/* Penalty flash */
+@keyframes penaltyFlash {
+  0%,100%{background:rgba(5,8,16,1)}
+  25%,75%{background:rgba(255,0,110,0.2)}
+}
+.penalty-flash { animation:penaltyFlash 0.6s ease; }
+
+/* Stack counter animation */
+.stack-counter {
+  position:absolute; top:-10px; right:-10px;
+  background:var(--neon-pink); color:#fff;
+  font-family:'Orbitron'; font-weight:900; font-size:12px;
+  width:22px; height:22px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:var(--glow-pink);
+  animation:counterBounce 0.3s ease;
+  z-index:5;
+}
+@keyframes counterBounce {
+  0%{transform:scale(0)} 60%{transform:scale(1.3)} 100%{transform:scale(1)}
+}
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+
+<!-- MENU SCREEN -->
+<div class="screen" id="menuScreen">
+  <div class="logo-wrap">
+    <div class="logo-title">UNO</div>
+    <div class="logo-sub">CYBER EDITION</div>
+  </div>
+  <div class="card-preview">
+    <div class="card-mini r">7</div>
+    <div class="card-mini b">+2</div>
+    <div class="card-mini g">⊘</div>
+    <div class="card-mini y">⇄</div>
+  </div>
+
+  <div class="menu-panel">
+    <div class="panel-title">// INIT GAME //</div>
+    <div class="input-group">
+      <label>PLAYER_ID</label>
+      <input class="cyber-input" id="playerName" placeholder="Masukkan nama kamu" maxlength="12">
+    </div>
+    <button class="btn btn-primary" onclick="createRoom()">⚡ BIKIN ROOM</button>
+    <div class="room-code-display" id="roomDisplay">
+      <div class="room-code-val" id="roomCodeVal">----</div>
+      <div class="room-code-hint">Bagiin kode ini ke teman kamu</div>
+    </div>
+    <div id="waitingPlayers" class="players-waiting" style="display:none"></div>
+    <div id="startBtnWrap" style="display:none; margin-top:10px;">
+      <button class="btn btn-secondary" onclick="startGameAsHost()">▶ MULAI GAME!</button>
+    </div>
+    <div class="divider">— atau —</div>
+    <div class="input-group">
+      <label>KODE ROOM</label>
+      <input class="cyber-input" id="roomCodeInput" placeholder="Masukkan kode room" maxlength="4">
+    </div>
+    <button class="btn btn-secondary" onclick="joinRoom()">🔗 JOIN ROOM</button>
+    <div class="status-msg loading-dots" id="statusMsg"></div>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div class="screen hidden" id="gameScreen">
+  <div class="game-layout">
+    <!-- Info bar -->
+    <div class="info-bar">
+      <div class="direction-badge" id="directionBadge">⟳ CLOCKWISE</div>
+      <div class="color-badge wild" id="currentColorBadge">WILD</div>
+      <div class="stack-badge" id="stackBadge" style="display:none">+? STACK!</div>
+    </div>
+
+    <!-- Opponents -->
+    <div class="opponents-area" id="opponentsArea"></div>
+
+    <!-- Center -->
+    <div class="center-area">
+      <div class="turn-indicator other-turn" id="turnIndicator">WAITING...</div>
+      <div class="piles-row">
+        <!-- Deck -->
+        <div style="text-align:center">
+          <div class="card deck-card" id="deckCard" onclick="drawFromDeck()">
+            <div class="card-face">
+              <div class="deck-logo">UNO</div>
+            </div>
+          </div>
+          <div class="pile-label" id="deckCount">52 CARDS</div>
+        </div>
+        <!-- Discard -->
+        <div style="text-align:center; position:relative;" class="discard-pile">
+          <div class="card" id="discardCard" style="cursor:default">
+            <div class="card-face" id="discardFace">
+              <div class="card-value num">?</div>
+            </div>
+          </div>
+          <div class="pile-label">DISCARD</div>
+        </div>
+      </div>
+      <div class="game-log" id="gameLog"></div>
+    </div>
+
+    <!-- Player area -->
+    <div class="player-area">
+      <div class="hand-header">
+        <div class="player-name-tag">
+          <div class="name-dot"></div>
+          <span id="myNameTag">PLAYER</span>
+        </div>
+        <button class="btn-uno" id="btnUno" onclick="callUno()">UNO!</button>
+      </div>
+      <div class="hand-scroll">
+        <div class="hand-cards" id="handCards"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VICTORY SCREEN -->
+<div class="screen hidden" id="victoryScreen">
+  <div class="victory-content">
+    <div class="victory-glitch" id="victoryTitle">WIN!</div>
+    <div class="victory-winner" id="victoryWinner">WINNER: ---</div>
+    <div class="victory-scores" id="victoryScores"></div>
+    <button class="btn btn-primary" onclick="requestRestart()" style="max-width:320px; margin:0 auto;">🔄 MAIN LAGI</button>
+    <button class="btn btn-ghost" onclick="backToMenu()" style="max-width:320px; margin:8px auto;">← MENU</button>
+    <div class="status-msg" id="victoryStatus" style="margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- Color Picker -->
+<div id="colorPicker" class="hidden">
+  <div class="picker-title">PILIH WARNA</div>
+  <div class="color-options">
+    <div class="color-opt red" onclick="pickColor('red')"><span class="color-opt-label">MERAH</span></div>
+    <div class="color-opt blue" onclick="pickColor('blue')"><span class="color-opt-label">BIRU</span></div>
+    <div class="color-opt green" onclick="pickColor('green')"><span class="color-opt-label">HIJAU</span></div>
+    <div class="color-opt yellow" onclick="pickColor('yellow')"><span class="color-opt-label">KUNING</span></div>
+  </div>
+</div>
+
+<!-- Notification container -->
+<div class="notif-container" id="notifContainer"></div>
+
+<script src="script.js">
+
+</script>
+</body>
+</html>
